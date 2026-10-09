@@ -1,0 +1,306 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  
+  html, body {
+    background-color: #07090e;
+    color: #dce6f7;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -0.01em;
+  }
+
+  ::selection {
+    background-color: #0c4a6e;
+    color: #38bdf8;
+  }
+
+  /* Scientific scrollbar */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background-color: #07090e;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: #1e293f;
+    border-radius: 3px;
+    transition: background-color 150ms ease;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #283754;
+  }
+}
+
+/* Aerospace panel styling */
+.workstation-panel {
+  background-color: #0b0f17;
+  border: 1px solid rgba(40, 55, 84, 0.6);
+  border-radius: 0.375rem;
+  box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.5);
+  position: relative;
+  overflow: hidden;
+}
+
+.workstation-header {
+  background: linear-gradient(180deg, rgba(20, 26, 41, 0.9) 0%, rgba(15, 20, 31, 0.8) 100%);
+  border-bottom: 1px solid rgba(40, 55, 84, 0.6);
+  color: #7d95c4;
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.workstation-tag {
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.625rem;
+  line-height: 0.875rem;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  border-width: 1px;
+  border-style: solid;
+}
+
+/* Buttons */
+.btn-primary {
+  background: linear-gradient(180deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+  border-radius: 0.25rem;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+  color: #07090e;
+  border-color: #38bdf8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+}
+.btn-primary:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.5);
+}
+.btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-secondary {
+  background-color: #141a29;
+  color: #adc1e6;
+  border: 1px solid #283754;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  font-weight: 500;
+  font-size: 0.75rem;
+  border-radius: 0.25rem;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-secondary:hover:not(:disabled) {
+  background-color: #1e293f;
+  color: #ffffff;
+  border-color: #394b70;
+}
+.btn-secondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  color: #7d95c4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+.btn-ghost:hover:not(:disabled) {
+  background-color: #141a29;
+  color: #dce6f7;
+}
+.btn-ghost:disabled {
+  opacity: 0.4;
+}
+
+.btn-action {
+  background-color: #141a29;
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-weight: 500;
+  transition: all 150ms ease;
+}
+.btn-action:hover {
+  background-color: #182133;
+  border-color: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.25);
+}
+
+/* Scientific data table */
+.sci-table {
+  width: 100%;
+  font-size: 0.75rem;
+  text-align: left;
+  border-collapse: collapse;
+}
+
+.sci-table th {
+  background-color: #0f141f;
+  color: #526b99;
+  border-bottom: 1px solid #1e293f;
+  padding: 0.375rem 0.625rem;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.625rem;
+  line-height: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.sci-table td {
+  border-bottom: 1px solid #141a29;
+  color: #adc1e6;
+  padding: 0.375rem 0.625rem;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.sci-table tr:hover td {
+  background-color: rgba(24, 33, 51, 0.7);
+  color: #ffffff;
+}
+
+.sci-table tr.selected td {
+  background-color: rgba(30, 41, 63, 0.9);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+/* Input fields */
+.sci-input {
+  background-color: #07090e;
+  border: 1px solid #1e293f;
+  color: #dce6f7;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  border-radius: 0.25rem;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  transition: all 150ms ease;
+}
+.sci-input:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.3);
+}
+.sci-input::placeholder {
+  color: #394b70;
+}
+
+.sci-label {
+  color: #526b99;
+  font-size: 0.625rem;
+  line-height: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  display: block;
+  margin-bottom: 0.125rem;
+}
+
+/* Grid reticle overlay */
+.crosshair-grid {
+  background-size: 28px 28px;
+  background-image: 
+    linear-gradient(to right, rgba(40, 55, 84, 0.25) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(40, 55, 84, 0.25) 1px, transparent 1px);
+}
+
+/* VIGIL Reference Aerospace Styling */
+.vigil-panel {
+  background-color: #080d1c;
+  border: 1px solid #162442;
+  border-radius: 0.875rem;
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.6);
+}
+
+.vigil-panel-subtle {
+  background-color: #0b1224;
+  border: 1px solid #1a2a4c;
+  border-radius: 0.75rem;
+}
+
+.vigil-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: #15223c;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.vigil-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #3b82f6;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.vigil-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 14px rgba(59, 130, 246, 1);
+}
+.vigil-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #3b82f6;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+  cursor: pointer;
+}
+
