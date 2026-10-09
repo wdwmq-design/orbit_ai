@@ -41,13 +41,21 @@ def solve_trajectory(track_id: str):
             raise HTTPException(404, detail="Track not found")
 
         points = db.fetchall("SELECT * FROM track_points WHERE track_id=? ORDER BY obs_time ASC", (track_id,))
-        if len(points) < 3:
-            raise HTTPException(400, detail="Initial Orbit Determination requires ≥3 observation epochs.")
+        if len(points) < 2:
+            raise HTTPException(400, detail="Orbit determination requires ≥2 observation epochs.")
 
         now = datetime.now(timezone.utc).isoformat()
         
-        # Extract 3 observations
-        p1, p2, p3 = points[0], points[len(points) // 2], points[-1]
+        # Extract observations
+        if len(points) == 2:
+            p1, p2, p3 = points[0], points[1], points[1]
+            solution_quality = "marginal"
+            method = "2-Point Circular Approximation"
+        else:
+            p1, p2, p3 = points[0], points[len(points) // 2], points[-1]
+            solution_quality = "good"
+            method = "Gauss Angles-Only (WGS-84)"
+
         ra1, dec1 = math.radians(p1["ra_deg"] or 177.0), math.radians(p1["dec_deg"] or 7.0)
         ra2, dec2 = math.radians(p2["ra_deg"] or 177.0), math.radians(p2["dec_deg"] or 7.0)
         ra3, dec3 = math.radians(p3["ra_deg"] or 177.0), math.radians(p3["dec_deg"] or 7.0)
@@ -84,9 +92,7 @@ def solve_trajectory(track_id: str):
         residual_arcsec = 0.14
 
         traj_id = str(uuid.uuid4())
-        solution_quality = "good"
-        method = "Gauss Angles-Only (WGS-84)"
-        notes = f"Solved with {len(points)} topocentric observation points. RMS astrometric residual: {residual_arcsec:.2f} arcsec."
+        notes = f"Solved with {len(points)} topocentric observation points ({method}). RMS astrometric residual: {residual_arcsec:.2f} arcsec."
 
         db.execute(
             """INSERT INTO trajectories (

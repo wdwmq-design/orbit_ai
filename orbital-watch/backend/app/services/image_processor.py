@@ -214,27 +214,36 @@ def normalise_image(arr: np.ndarray) -> np.ndarray:
 # Blob / source detection (ported from region_growing.m + centroiding.m)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def detect_sources(img_norm: np.ndarray,
-                   threshold: float = 0.4,
-                   min_pixels: int = 4,
+def detect_sources(arr: np.ndarray,
+                   threshold_sigma: float = 5.0,
+                   min_pixels: int = 3,
                    max_pixels: int = 500,
                    window_size: int = 5) -> List[Dict[str, Any]]:
     """
     Detects point-source candidates (stars and compact movers).
     Ported from MATLAB region_growing.m + centroiding.m.
+
+    Uses proper sigma-clipped background estimation on calibrated pixel data,
+    thresholding at bg_median + threshold_sigma * bg_std.
     Returns list of source dicts with pixel coordinates and SNR estimates.
     """
     if not SKIMAGE_OK:
         return []
 
-    binary = img_norm > threshold
+    bg_med, bg_std = estimate_background(arr)
+
+    if bg_std > 0:
+        thresh_val = bg_med + threshold_sigma * bg_std
+    else:
+        thresh_val = float(np.percentile(arr, 95))
+
+    binary = arr > thresh_val
     labeled = measure.label(binary, connectivity=2)
-    props = measure.regionprops(labeled, intensity_image=img_norm)
+    props = measure.regionprops(labeled, intensity_image=arr)
 
     sources = []
-    bg_med, bg_std = estimate_background(img_norm)
     half = window_size // 2
-    rows, cols = img_norm.shape
+    rows, cols = arr.shape
 
     for prop in props:
         npix = prop.area
@@ -247,7 +256,7 @@ def detect_sources(img_norm: np.ndarray,
         r1 = min(rows, int(cy) + half + 1)
         c0 = max(0, int(cx) - half)
         c1 = min(cols, int(cx) + half + 1)
-        window = img_norm[r0:r1, c0:c1]
+        window = arr[r0:r1, c0:c1]
         total = window.sum()
         if total > 0:
             gy, gx = np.mgrid[r0:r1, c0:c1]
@@ -256,7 +265,7 @@ def detect_sources(img_norm: np.ndarray,
         else:
             cx_sub, cy_sub = float(cx), float(cy)
 
-        peak = float(prop.max_intensity)
+        peak = float(prop.intensity_max if hasattr(prop, "intensity_max") else getattr(prop, "max_intensity", 1.0))
         snr = (peak - bg_med) / bg_std if bg_std > 0 else 0.0
 
         # Morphology: eccentricity determines point vs. streak
@@ -275,15 +284,16 @@ def detect_sources(img_norm: np.ndarray,
     return sources
 
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Streak / elongated source detection
 # ─────────────────────────────────────────────────────────────────────────────
 
-def detect_streaks(img_norm: np.ndarray,
+def detect_streaks(arr: np.ndarray,
                    threshold_sigma: float = 3.0) -> List[Dict[str, Any]]:
     """
     Detects elongated streak candidates using morphological top-hat filtering
-    and connected component analysis.
+    and connected component analysis on calibrated pixel arrays.
 
     Scientific note: A 'streak' in this context means an elongated high-SNR
     source in the image plane. It does NOT directly indicate the physical
@@ -292,25 +302,24 @@ def detect_streaks(img_norm: np.ndarray,
     if not SKIMAGE_OK:
         return []
 
-    bg_med, bg_std = estimate_background(img_norm)
+    bg_med, bg_std = estimate_background(arr)
     thresh = bg_med + threshold_sigma * bg_std
-    thresh_norm = np.clip((thresh - img_norm.min()) /
-                          (img_norm.max() - img_norm.min() + 1e-9), 0, 1)
 
     # Top-hat filter to enhance elongated features
     selem = morphology.disk(3)
-    top_hat = morphology.white_tophat(img_norm, selem)
+    top_hat = morphology.white_tophat(arr, selem)
 
-    binary = top_hat > (float(np.percentile(top_hat, 95)))
+    min_contrast = max(0.005, threshold_sigma * bg_std)
+    binary = (top_hat > min_contrast) & (arr > thresh)
     labeled = measure.label(binary, connectivity=2)
-    props = measure.regionprops(labeled, intensity_image=img_norm)
+    props = measure.regionprops(labeled, intensity_image=arr)
 
     streaks = []
     for prop in props:
-        if prop.area < 20:
+        if prop.area < 4:
             continue
         ecc = float(prop.eccentricity) if hasattr(prop, "eccentricity") else 0.0
-        if ecc < 0.80:
+        if ecc < 0.75:
             continue  # Not elongated enough to be a streak candidate
 
         cy, cx = prop.centroid
@@ -320,7 +329,7 @@ def detect_streaks(img_norm: np.ndarray,
         # Major axis orientation
         angle_deg = float(prop.orientation) * (180.0 / math.pi) if hasattr(prop, "orientation") else None
 
-        peak = float(prop.max_intensity)
+        peak = float(prop.intensity_max if hasattr(prop, "intensity_max") else getattr(prop, "max_intensity", 1.0))
         snr = (peak - bg_med) / bg_std if bg_std > 0 else 0.0
 
         streaks.append({
@@ -382,7 +391,14 @@ def analyse_image(file_path: str,
 
     img_norm = normalise_image(arr)
 
-    threshold = params.get("threshold", 0.4)
+    # Prefer threshold_sigma (1-20 sigma) over legacy threshold fraction
+    threshold_sigma = params.get("threshold_sigma", None)
+    if threshold_sigma is None:
+        # Legacy: convert fraction [0, 1] to approximate sigma (fraction * 10)
+        legacy = params.get("threshold", 0.5)
+        threshold_sigma = max(0.5, legacy * 10.0)
+    threshold_sigma = float(threshold_sigma)
+
     min_pixels = params.get("min_pixels", 4)
     max_pixels = params.get("max_pixels", 500)
     window_size = params.get("window_size", 5)
@@ -391,7 +407,7 @@ def analyse_image(file_path: str,
     detections = []
 
     # --- Point-source detections ---
-    sources = detect_sources(img_norm, threshold=threshold,
+    sources = detect_sources(arr, threshold_sigma=threshold_sigma,
                              min_pixels=min_pixels, max_pixels=max_pixels,
                              window_size=window_size)
     for src in sources:
@@ -418,11 +434,12 @@ def analyse_image(file_path: str,
         })
 
     # --- Streak detections ---
+    streak_candidates = []
     if detect_streaks_flag:
-        streaks = detect_streaks(img_norm)
+        streaks = detect_streaks(arr, threshold_sigma=threshold_sigma)
         for stk in streaks:
             confidence = min(1.0, stk["snr"] / 15.0) if stk["snr"] > 0 else None
-            detections.append({
+            streak_candidates.append({
                 "id": str(uuid.uuid4()),
                 "job_id": job_id,
                 "image_id": image_id,
@@ -440,6 +457,25 @@ def analyse_image(file_path: str,
                 "centroid_y": round(stk["centroid_y"], 2),
                 "created_at": now,
             })
+
+    # Deduplicate: remove point-source detections that fall inside or right next to a detected streak
+    if streak_candidates:
+        filtered_points = []
+        for pt in detections:
+            px, py = pt["centroid_x"], pt["centroid_y"]
+            near_streak = False
+            for stk in streak_candidates:
+                # Check distance from point to streak centroid or line segment
+                sx, sy = stk["centroid_x"], stk["centroid_y"]
+                slen = stk["length_px"] or 20.0
+                if math.hypot(px - sx, py - sy) < max(25.0, slen / 2.0):
+                    near_streak = True
+                    break
+            if not near_streak:
+                filtered_points.append(pt)
+        detections = filtered_points + streak_candidates
+    else:
+        detections = detections
 
     return detections, metadata
 

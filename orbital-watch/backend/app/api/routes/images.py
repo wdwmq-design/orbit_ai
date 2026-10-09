@@ -1,5 +1,6 @@
 import uuid
 import os
+import shutil
 from datetime import datetime, timezone
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Query
 from app.core.config import settings
@@ -9,8 +10,111 @@ from app.services.image_processor import analyse_image, _read_fits
 
 router = APIRouter(prefix="/images", tags=["images"])
 
+# Known bundled sample file paths (absolute, on the deployment machine)
+_SAMPLE_CANDIDATES = {
+    "bmp": [
+        r"d:\fus\orbital-watch\matlab_reference\images\bmp_4.bmp",
+        r"d:\fus\star_tracker\star_tracker\images\bmp_4.bmp",
+    ],
+    "fits": [
+        r"d:\fus\ps1-20250220_17_XY04_p11\XY04_p11\o60726g0471o.2228662.ch.2850226.XY04.p11.fits",
+        r"d:\fus\ps1-20250220_17_XY04_p11\XY04_p11\o60726g0472o.2228663.ch.2850226.XY04.p11.fits",
+    ],
+    "tiff": [
+        r"d:\fus\orbital-watch\matlab_reference\images\sample.tiff",
+    ],
+}
+
+
+
 def _ext_ok(filename: str) -> bool:
     return os.path.splitext(filename)[1].lower() in settings.allowed_extensions
+
+
+@router.post("/samples/load/{sample_type}", response_model=ImageUploadResponse, status_code=201)
+def load_sample(sample_type: str):
+    """
+    Load a bundled sample image (bmp | fits | tiff) and register it in the database.
+    Returns the same ImageUploadResponse as a regular upload.
+    """
+    key = sample_type.lower()
+    candidates = _SAMPLE_CANDIDATES.get(key, [])
+    src_path: str | None = None
+    for c in candidates:
+        if os.path.isfile(c):
+            src_path = c
+            break
+
+    if src_path is None:
+        raise HTTPException(
+            404,
+            detail=f"No bundled sample found for type '{sample_type}'. "
+                   f"Check that sample files exist at the expected paths."
+        )
+
+    orig_filename = os.path.basename(src_path)
+    ext = os.path.splitext(orig_filename)[1].lower()
+    image_id = str(uuid.uuid4())
+    stored_name = f"{image_id}{ext}"
+    os.makedirs(settings.upload_dir, exist_ok=True)
+    dest = os.path.join(settings.upload_dir, stored_name)
+    shutil.copy2(src_path, dest)
+
+    file_size = os.path.getsize(dest)
+    width, height, exposure_s, obs_date, ra, dec, telescope = (None,) * 7
+
+    if ext in (".fits", ".fit"):
+        try:
+            _, hdr = _read_fits(dest)
+            width = int(hdr.get("NAXIS1", 0)) or None
+            height = int(hdr.get("NAXIS2", 0)) or None
+            exposure_s = _safe(hdr.get("EXPTIME"))
+            obs_date = hdr.get("DATE-OBS")
+            ra = _safe(hdr.get("RA")) if _safe(hdr.get("RA")) is not None else _safe(hdr.get("CRVAL1"))
+            dec = _safe(hdr.get("DEC")) if _safe(hdr.get("DEC")) is not None else _safe(hdr.get("CRVAL2"))
+            telescope = hdr.get("TELESCOP")
+        except Exception:
+            pass
+    else:
+        try:
+            from PIL import Image as PILImage
+            with PILImage.open(dest) as img:
+                width, height = img.size
+        except Exception:
+            pass
+
+    now = datetime.now(timezone.utc).isoformat()
+    meta = ImageMetadata(
+        id=image_id,
+        filename=stored_name,
+        original_filename=orig_filename,
+        file_size=file_size,
+        file_format=ext.lstrip("."),
+        width=width,
+        height=height,
+        upload_time=now,
+        exposure_time_s=exposure_s,
+        obs_date=obs_date,
+        ra_deg=ra,
+        dec_deg=dec,
+        telescope=telescope,
+        status="uploaded",
+    )
+
+    with get_db() as db:
+        db.execute(
+            """INSERT INTO images VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                meta.id, meta.filename, meta.original_filename, meta.file_size,
+                meta.file_format, meta.width, meta.height, meta.upload_time,
+                meta.exposure_time_s, meta.obs_date, meta.ra_deg, meta.dec_deg,
+                meta.telescope, meta.status,
+            )
+        )
+        db.commit()
+
+    return ImageUploadResponse(image=meta, message=f"Sample {sample_type.upper()} loaded successfully")
+
 
 @router.get("", response_model=list[ImageMetadata])
 def list_images(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):

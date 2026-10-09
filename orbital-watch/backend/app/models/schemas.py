@@ -91,7 +91,8 @@ class DetectionJob(BaseModel):
 
 class DetectionJobCreate(BaseModel):
     image_id: str
-    threshold: float = Field(0.4, ge=0.0, le=1.0, description="Detection brightness threshold")
+    threshold: float = Field(0.4, ge=0.0, le=1.0, description="Legacy brightness threshold (fraction). Ignored when threshold_sigma is set.")
+    threshold_sigma: float = Field(5.0, ge=0.5, le=20.0, description="Detection threshold in sigma above background (preferred)")
     min_pixels: int = Field(4, ge=1, description="Min pixels for valid detection")
     max_pixels: int = Field(500, ge=10, description="Max pixels for valid detection")
     window_size: int = Field(5, ge=3, le=21, description="Centroiding window size")

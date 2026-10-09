@@ -73,6 +73,7 @@ export interface DetectionJob {
 export interface DetectionParams {
   image_id: string
   threshold?: number
+  threshold_sigma?: number
   min_pixels?: number
   max_pixels?: number
   window_size?: number
@@ -189,6 +190,8 @@ export const api = {
       apiClient.post<DetectionJob>(`/images/${id}/analyse`, { image_id: id, ...params }).then((r) => r.data),
     listJobs: (id: string) => apiClient.get<DetectionJob[]>(`/images/${id}/jobs`).then((r) => r.data),
     getJob: (jobId: string) => apiClient.get<DetectionJob>(`/images/jobs/${jobId}`).then((r) => r.data),
+    loadSample: (sampleType: string) =>
+      apiClient.post<{ image: ImageMetadata; message: string }>(`/images/samples/load/${sampleType}`).then((r) => r.data),
   },
 
   tracks: {

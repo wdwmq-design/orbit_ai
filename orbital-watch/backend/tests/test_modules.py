@@ -79,3 +79,35 @@ def test_reports_generation():
     rep = resp.json()
     assert rep["title"] == "TEST-MPC-EXPORT"
     assert "mpc_80_col_stream" in rep["content"]
+
+def test_sample_load_and_analysis():
+    client = TestClient(app)
+    # Load BMP sample
+    resp = client.post("/api/images/samples/load/bmp")
+    assert resp.status_code == 201
+    data = resp.json()
+    image = data["image"]
+    assert image["file_format"] == "bmp"
+    assert image["width"] > 0
+    assert image["height"] > 0
+
+    # Run detection analysis on the loaded sample with sigma threshold
+    analyse_req = {
+        "image_id": image["id"],
+        "threshold_sigma": 5.0,
+        "min_pixels": 3,
+        "max_pixels": 200,
+        "detect_streaks": True
+    }
+    resp_job = client.post(f"/api/images/{image['id']}/analyse", json=analyse_req)
+    assert resp_job.status_code == 202
+    job = resp_job.json()
+    assert job["id"] is not None
+
+    # Retrieve job details
+    resp_get_job = client.get(f"/api/images/jobs/{job['id']}")
+    assert resp_get_job.status_code == 200
+    job_detail = resp_get_job.json()
+    assert "detections" in job_detail
+    assert isinstance(job_detail["detections"], list)
+

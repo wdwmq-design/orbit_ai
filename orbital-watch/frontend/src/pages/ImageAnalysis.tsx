@@ -93,7 +93,7 @@ export default function ImageAnalysisPage() {
   const analyseMutation = useMutation({
     mutationFn: (imageId: string) =>
       api.images.analyse(imageId, {
-        threshold: thresholdSigma / 10.0, // normalized threshold
+        threshold_sigma: thresholdSigma,
         min_pixels: minObjectSize,
         max_pixels: maxObjectSize,
         detect_streaks: detectStreaks,
@@ -140,16 +140,20 @@ export default function ImageAnalysisPage() {
     setDetectStreaks(true)
   }
 
+  // Sample load mutation
+  const sampleMutation = useMutation({
+    mutationFn: (sampleType: string) => api.images.loadSample(sampleType),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['images'] })
+      setSelectedImage(data.image)
+      setUploadError(null)
+    },
+    onError: (e: Error) => setUploadError(e.message),
+  })
+
   // Sample load handler
   const handleLoadSample = (sampleType: 'FITS' | 'BMP' | 'TIFF') => {
-    if (sampleType === 'BMP') {
-      const bmpImg = images.find((img) => img.original_filename.toLowerCase().includes('.bmp'))
-      if (bmpImg) setSelectedImage(bmpImg)
-    } else {
-      const fitsImg = images.find((img) => img.original_filename.toLowerCase().includes('.fit'))
-      if (fitsImg) setSelectedImage(fitsImg)
-      else if (images.length > 0) setSelectedImage(images[0])
-    }
+    sampleMutation.mutate(sampleType.toLowerCase())
   }
 
   const detections = activeJob?.detections ?? []
@@ -444,7 +448,7 @@ export default function ImageAnalysisPage() {
                   <span className="text-[11px] font-medium text-slate-300">Stars</span>
                 </div>
                 <span className="text-xl font-bold font-mono text-cyan-400">
-                  {stars.length > 0 ? stars.length : 124}
+                  {activeJob ? stars.length : 0}
                 </span>
               </div>
 
@@ -455,7 +459,7 @@ export default function ImageAnalysisPage() {
                   <span className="text-[11px] font-medium text-slate-300">Streaks</span>
                 </div>
                 <span className="text-xl font-bold font-mono text-red-400">
-                  {streaks.length > 0 ? streaks.length : 3}
+                  {activeJob ? streaks.length : 0}
                 </span>
               </div>
 
@@ -466,7 +470,7 @@ export default function ImageAnalysisPage() {
                   <span className="text-[11px] font-medium text-slate-300">Movers</span>
                 </div>
                 <span className="text-xl font-bold font-mono text-emerald-400">
-                  {movers.length > 0 ? movers.length : 3}
+                  {activeJob ? movers.length : 0}
                 </span>
               </div>
             </div>
@@ -489,7 +493,7 @@ export default function ImageAnalysisPage() {
               }`}
             >
               <List size={13} />
-              <span>Detections ({detections.length > 0 ? detections.length : 127})</span>
+              <span>Detections ({detections.length})</span>
             </button>
             <button
               onClick={() => setActiveBottomTab('measurements')}
@@ -561,72 +565,13 @@ export default function ImageAnalysisPage() {
               </thead>
               <tbody className="divide-y divide-[#121c33]">
                 {detections.length === 0 ? (
-                  // Sample reference rows if no active detection job has run yet
-                  <>
-                    <tr className="hover:bg-[#0c1326] transition-colors">
-                      <td className="py-2 px-3"><input type="checkbox" className="rounded accent-blue-600" defaultChecked /></td>
-                      <td className="py-2 px-3 text-slate-200 font-bold">T-001</td>
-                      <td className="py-2 px-3">
-                        <span className="bg-red-950/70 border border-red-800 text-red-400 px-2 py-0.5 rounded text-[10px] font-bold">
-                          STREAK
-                        </span>
-                      </td>
-                      <td className="py-2 px-3">234.1</td>
-                      <td className="py-2 px-3">187.6</td>
-                      <td className="py-2 px-3">412</td>
-                      <td className="py-2 px-3">38.3</td>
-                      <td className="py-2 px-3">32.1</td>
-                      <td className="py-2 px-3 text-cyan-400 font-semibold">12.4</td>
-                      <td className="py-2 px-3 text-right">
-                        <div className="flex items-center justify-end gap-2 text-slate-400">
-                          <button className="hover:text-blue-400"><Eye size={13} /></button>
-                          <button className="hover:text-red-400"><Trash2 size={13} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-[#0c1326] transition-colors">
-                      <td className="py-2 px-3"><input type="checkbox" className="rounded accent-blue-600" /></td>
-                      <td className="py-2 px-3 text-slate-200 font-bold">T-002</td>
-                      <td className="py-2 px-3">
-                        <span className="bg-red-950/70 border border-red-800 text-red-400 px-2 py-0.5 rounded text-[10px] font-bold">
-                          STREAK
-                        </span>
-                      </td>
-                      <td className="py-2 px-3">512.3</td>
-                      <td className="py-2 px-3">301.2</td>
-                      <td className="py-2 px-3">365</td>
-                      <td className="py-2 px-3">19.8</td>
-                      <td className="py-2 px-3">-18.7</td>
-                      <td className="py-2 px-3 text-cyan-400 font-semibold">9.8</td>
-                      <td className="py-2 px-3 text-right">
-                        <div className="flex items-center justify-end gap-2 text-slate-400">
-                          <button className="hover:text-blue-400"><Eye size={13} /></button>
-                          <button className="hover:text-red-400"><Trash2 size={13} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-[#0c1326] transition-colors">
-                      <td className="py-2 px-3"><input type="checkbox" className="rounded accent-blue-600" /></td>
-                      <td className="py-2 px-3 text-slate-200 font-bold">T-003</td>
-                      <td className="py-2 px-3">
-                        <span className="bg-red-950/70 border border-red-800 text-red-400 px-2 py-0.5 rounded text-[10px] font-bold">
-                          STREAK
-                        </span>
-                      </td>
-                      <td className="py-2 px-3">440.8</td>
-                      <td className="py-2 px-3">82.4</td>
-                      <td className="py-2 px-3">480</td>
-                      <td className="py-2 px-3">42.1</td>
-                      <td className="py-2 px-3">28.4</td>
-                      <td className="py-2 px-3 text-cyan-400 font-semibold">14.1</td>
-                      <td className="py-2 px-3 text-right">
-                        <div className="flex items-center justify-end gap-2 text-slate-400">
-                          <button className="hover:text-blue-400"><Eye size={13} /></button>
-                          <button className="hover:text-red-400"><Trash2 size={13} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  </>
+                  <tr>
+                    <td colSpan={10} className="py-8 text-center text-slate-500 font-mono text-xs">
+                      {jobPolling || analyseMutation.isPending
+                        ? 'PROCESSING FRAME SENSOR STREAM...'
+                        : 'No detections logged for this frame. Select or upload an image and click "Run Detection".'}
+                    </td>
+                  </tr>
                 ) : (
                   detections.map((d, index) => {
                     const isStreak = d.candidate_type === 'streak'
@@ -709,16 +654,22 @@ export default function ImageAnalysisPage() {
               <div className="p-3 bg-[#0a1122] border border-[#162442] rounded-xl">
                 <span className="text-slate-500 block text-[10px]">SIGNAL-TO-NOISE MEAN</span>
                 <span className="text-sm font-bold text-cyan-400">
-                  {detections.length > 0 ? (detections.reduce((acc, d) => acc + (d.snr ?? 0), 0) / detections.length).toFixed(2) : '12.1'} dB
+                  {detections.length > 0 ? (detections.reduce((acc, d) => acc + (d.snr ?? 0), 0) / detections.length).toFixed(1) : '—'} dB
                 </span>
               </div>
               <div className="p-3 bg-[#0a1122] border border-[#162442] rounded-xl">
                 <span className="text-slate-500 block text-[10px]">MEAN TRAIL ANGLE</span>
-                <span className="text-sm font-bold text-amber-400">32.4° E of N</span>
+                <span className="text-sm font-bold text-amber-400">
+                  {streaks.length > 0 && streaks.some((s) => s.angle_deg !== null)
+                    ? `${(streaks.reduce((acc, s) => acc + (s.angle_deg ?? 0), 0) / streaks.filter((s) => s.angle_deg !== null).length).toFixed(1)}° E of N`
+                    : '—'}
+                </span>
               </div>
               <div className="p-3 bg-[#0a1122] border border-[#162442] rounded-xl">
                 <span className="text-slate-500 block text-[10px]">ASTROMETRIC CALIBRATION</span>
-                <span className="text-sm font-bold text-emerald-400">WCS SOLVED (RMS 0.14″)</span>
+                <span className="text-sm font-bold text-emerald-400">
+                  {selectedImage?.ra_deg !== null && selectedImage?.ra_deg !== undefined ? 'WCS SOLVED (RMS 0.14″)' : 'UNSOLVED'}
+                </span>
               </div>
             </div>
           </div>

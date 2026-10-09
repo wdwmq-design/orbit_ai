@@ -147,6 +147,67 @@ def _run_simulation(sim_id: str, config: dict):
                     "UPDATE simulations SET status='completed', output_image_id=?, ground_truth_json=? WHERE id=?",
                     (img_id, json.dumps(ground_truth), sim_id)
                 )
+
+                # Execute detection pipeline on synthetic benchmark image
+                from app.services.image_processor import analyse_image
+                job_id = str(uuidlib.uuid4())
+                db.execute(
+                    "INSERT INTO detection_jobs(id,image_id,created_at,completed_at,status) VALUES(?,?,?,?,?)",
+                    (job_id, img_id, now, now, "completed")
+                )
+                detections, _ = analyse_image(out_path, job_id, img_id, {
+                    "threshold_sigma": 3.0,
+                    "detect_streaks": True,
+                    "min_pixels": 4,
+                    "max_pixels": 500,
+                })
+                for det in detections:
+                    db.execute(
+                        """INSERT INTO detections VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        (
+                            det["id"], det["job_id"], det["image_id"], det["candidate_type"],
+                            det["confidence"], det["pixel_x"], det["pixel_y"],
+                            det["pixel_x2"], det["pixel_y2"], det["length_px"],
+                            det["angle_deg"], det["snr"], det["magnitude"],
+                            det["centroid_x"], det["centroid_y"], det["created_at"],
+                        )
+                    )
+
+                # Compute empirical ground truth cross-match metrics
+                streak_dets = [d for d in detections if d["candidate_type"] == "streak"]
+                gt_streaks = [g for g in ground_truth if g.get("type") == "synthetic_streak"]
+
+                iou_threshold_px = 30.0
+                tp = 0
+                matched_gt = set()
+                for det in streak_dets:
+                    dx = det.get("centroid_x") or det.get("pixel_x") or 0
+                    dy = det.get("centroid_y") or det.get("pixel_y") or 0
+                    for j, gt in enumerate(gt_streaks):
+                        if j in matched_gt:
+                            continue
+                        gx = (gt["x0"] + gt["x1"]) / 2
+                        gy = (gt["y0"] + gt["y1"]) / 2
+                        dist = np.sqrt((dx - gx) ** 2 + (dy - gy) ** 2)
+                        if dist < iou_threshold_px:
+                            tp += 1
+                            matched_gt.add(j)
+                            break
+
+                fp = len(streak_dets) - tp
+                fn = len(gt_streaks) - tp
+                precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+                recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+                f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+                far = fp / max(1, len(streak_dets)) if streak_dets else 0.0
+
+                eval_id = str(uuidlib.uuid4())
+                db.execute(
+                    """INSERT INTO eval_runs VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (eval_id, sim_id, now, job_id, tp, fp, fn,
+                     round(precision, 4), round(recall, 4), round(f1, 4), None, round(far, 4),
+                     "Automated benchmark evaluation on synthetic frame")
+                )
             except Exception as e:
                 db.execute(
                     "UPDATE simulations SET status='completed', ground_truth_json=? WHERE id=?",

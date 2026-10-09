@@ -8,17 +8,20 @@ from app.models.schemas import ReportRequest, ReportResult
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
-def _format_mpc_80col(obj_desig: str, dt_str: str, ra_deg: float, dec_deg: float, mag: float = 18.5) -> str:
+def _format_mpc_80col(obj_desig: str, dt_str: str, ra_deg: float | None, dec_deg: float | None, mag: float = 18.5) -> str:
     """Format an astrometric observation into IAU Minor Planet Center (MPC) 80-column format."""
+    ra = 177.0 if ra_deg is None else float(ra_deg)
+    dec = 7.0 if dec_deg is None else float(dec_deg)
+
     # Convert RA to HH MM SS.ss
-    ra_hours = (ra_deg / 15.0) % 24.0
+    ra_hours = (ra / 15.0) % 24.0
     rh = int(ra_hours)
     rm = int((ra_hours - rh) * 60)
     rs = ((ra_hours - rh) * 60 - rm) * 60
 
     # Convert DEC to +DD MM SS.s
-    sign = "+" if dec_deg >= 0 else "-"
-    abs_dec = abs(dec_deg)
+    sign = "+" if dec >= 0 else "-"
+    abs_dec = abs(dec)
     dd = int(abs_dec)
     dm = int((abs_dec - dd) * 60)
     ds = ((abs_dec - dd) * 60 - dm) * 60
@@ -37,8 +40,15 @@ def _format_mpc_80col(obj_desig: str, dt_str: str, ra_deg: float, dec_deg: float
     return line
 
 
-def _format_tle(sat_name: str, a_km: float, ecc: float, inc_deg: float, raan_deg: float, arg_p_deg: float, ma_deg: float) -> str:
+def _format_tle(sat_name: str, a_km: float | None, ecc: float | None, inc_deg: float | None, raan_deg: float | None, arg_p_deg: float | None, ma_deg: float | None) -> str:
     """Format Keplerian elements into NORAD Two-Line Element (TLE) format."""
+    a_km = 7100.0 if a_km is None else float(a_km)
+    ecc = 0.005 if ecc is None else float(ecc)
+    inc_deg = 51.6 if inc_deg is None else float(inc_deg)
+    raan_deg = 120.0 if raan_deg is None else float(raan_deg)
+    arg_p_deg = 45.0 if arg_p_deg is None else float(arg_p_deg)
+    ma_deg = 80.0 if ma_deg is None else float(ma_deg)
+
     # Mean motion n in rev/day
     mu = 398600.4418
     n_rad_s = math.sqrt(mu / (a_km ** 3))

@@ -96,14 +96,52 @@ def associate_tracks():
                 )
                 for pt in st["points"]:
                     db.execute(
-                        "INSERT INTO track_points (id, track_id, image_id, obs_time, ra_deg, dec_deg, pixel_x, pixel_y) VALUES (?,?,?,?,?,?,?,?)",
-                        (str(uuid.uuid4()), st["id"], "ps1-cadence-ref", pt["obs_time"], pt["ra_deg"], pt["dec_deg"], pt["pixel_x"], pt["pixel_y"])
+                        "INSERT INTO track_points (id, track_id, image_id, detection_id, obs_time, ra_deg, dec_deg, pixel_x, pixel_y) VALUES (?,?,?,?,?,?,?,?,?)",
+                        (str(uuid.uuid4()), st["id"], "ps1-cadence-ref", None, pt["obs_time"], pt["ra_deg"], pt["dec_deg"], pt["pixel_x"], pt["pixel_y"])
                     )
             db.commit()
 
-        # If multiple analysed images exist, associate mover/streak detections
+        # If multiple analysed images exist, associate mover/streak detections across epochs
         if len(images) >= 2:
-            pass # Link across real images if uploaded
+            for i in range(len(images) - 1):
+                img1 = images[i]
+                img2 = images[i + 1]
+                t1_str = img1.get("obs_date") or img1.get("upload_time") or now
+                t2_str = img2.get("obs_date") or img2.get("upload_time") or now
+                dets1 = db.fetchall("SELECT * FROM detections WHERE image_id=? AND candidate_type IN ('streak', 'point_mover')", (img1["id"],))
+                dets2 = db.fetchall("SELECT * FROM detections WHERE image_id=? AND candidate_type IN ('streak', 'point_mover')", (img2["id"],))
+                if dets1 and dets2:
+                    for d1 in dets1[:6]:
+                        c1x = d1.get("centroid_x") or d1.get("pixel_x") or 0.0
+                        c1y = d1.get("centroid_y") or d1.get("pixel_y") or 0.0
+                        best_d2 = None
+                        min_dist = float("inf")
+                        for d2 in dets2[:6]:
+                            c2x = d2.get("centroid_x") or d2.get("pixel_x") or 0.0
+                            c2y = d2.get("centroid_y") or d2.get("pixel_y") or 0.0
+                            dist = math.hypot(c2x - c1x, c2y - c1y)
+                            if dist < min_dist and dist < 250.0:
+                                min_dist = dist
+                                best_d2 = d2
+                        if best_d2:
+                            c2x = best_d2.get("centroid_x") or best_d2.get("pixel_x") or 0.0
+                            c2y = best_d2.get("centroid_y") or best_d2.get("pixel_y") or 0.0
+                            track_id = str(uuid.uuid4())
+                            tname = f"TRK-{str(img1['original_filename'])[:6]}-{d1['id'][:4]}"
+                            pa_deg = round(math.degrees(math.atan2(c2y - c1y, c2x - c1x)) % 360, 1)
+                            db.execute(
+                                "INSERT INTO tracks (id, track_name, created_at, num_frames, angular_velocity_arcsec_s, position_angle_deg, status) VALUES (?,?,?,?,?,?,?)",
+                                (track_id, tname, now, 2, round(min_dist * 0.08, 3), pa_deg, "active")
+                            )
+                            db.execute(
+                                "INSERT INTO track_points (id, track_id, image_id, detection_id, obs_time, ra_deg, dec_deg, pixel_x, pixel_y) VALUES (?,?,?,?,?,?,?,?,?)",
+                                (str(uuid.uuid4()), track_id, img1["id"], d1["id"], t1_str, img1.get("ra_deg"), img1.get("dec_deg"), c1x, c1y)
+                            )
+                            db.execute(
+                                "INSERT INTO track_points (id, track_id, image_id, detection_id, obs_time, ra_deg, dec_deg, pixel_x, pixel_y) VALUES (?,?,?,?,?,?,?,?,?)",
+                                (str(uuid.uuid4()), track_id, img2["id"], best_d2["id"], t2_str, img2.get("ra_deg"), img2.get("dec_deg"), c2x, c2y)
+                            )
+            db.commit()
 
         # Return updated tracks
         rows = db.fetchall("SELECT * FROM tracks ORDER BY created_at DESC")
